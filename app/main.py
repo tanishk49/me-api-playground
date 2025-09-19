@@ -4,6 +4,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from . import models, database, schemas
 
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
+
 # ------------------ APP SETUP ------------------
 app = FastAPI()
 
@@ -19,17 +23,29 @@ app.add_middleware(
 # Create DB tables
 models.Base.metadata.create_all(bind=database.engine)
 
+# ------------------ FRONTEND ------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FRONTEND_DIR = os.path.join(BASE_DIR, "../frontend_html")  # relative to app/ folder
+
+# Serve static files
+app.mount("/frontend", StaticFiles(directory=FRONTEND_DIR), name="frontend_html")
+
+# Serve index.html at root
+@app.get("/")
+def read_frontend():
+    index_path = os.path.join(FRONTEND_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"error": "index.html not found"}
 
 # ------------------ HEALTH ------------------
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
 
-
 # ------------------ CREATE ------------------
 @app.post("/profiles", response_model=schemas.ProfileResponse)
 def create_profile(profile: schemas.ProfileCreate, db: Session = Depends(database.get_db)):
-    # base profile
     db_profile = models.Profile(
         name=profile.name,
         email=profile.email,
@@ -68,12 +84,10 @@ def create_profile(profile: schemas.ProfileCreate, db: Session = Depends(databas
     db.refresh(db_profile)
     return db_profile
 
-
 # ------------------ READ (ALL) ------------------
 @app.get("/profiles", response_model=list[schemas.ProfileResponse])
 def get_profiles(db: Session = Depends(database.get_db)):
     return db.query(models.Profile).all()
-
 
 # ------------------ READ (ONE) ------------------
 @app.get("/profiles/{profile_id}", response_model=schemas.ProfileResponse)
@@ -83,7 +97,6 @@ def get_profile(profile_id: int, db: Session = Depends(database.get_db)):
         raise HTTPException(status_code=404, detail="Profile not found")
     return profile
 
-
 # ------------------ UPDATE ------------------
 @app.put("/profiles/{profile_id}", response_model=schemas.ProfileResponse)
 def update_profile(profile_id: int, profile_data: schemas.ProfileCreate, db: Session = Depends(database.get_db)):
@@ -91,7 +104,6 @@ def update_profile(profile_id: int, profile_data: schemas.ProfileCreate, db: Ses
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
 
-    # update base info
     profile.name = profile_data.name
     profile.email = profile_data.email
     profile.education = profile_data.education
@@ -99,12 +111,10 @@ def update_profile(profile_id: int, profile_data: schemas.ProfileCreate, db: Ses
     profile.linkedin = profile_data.linkedin
     profile.portfolio = profile_data.portfolio
 
-    # reset skills
     profile.skills.clear()
     for skill in profile_data.skills:
         db.add(models.Skill(name=skill.name, profile_id=profile.id))
 
-    # reset projects
     profile.projects.clear()
     for project in profile_data.projects:
         db.add(models.Project(
@@ -114,7 +124,6 @@ def update_profile(profile_id: int, profile_data: schemas.ProfileCreate, db: Ses
             profile_id=profile.id
         ))
 
-    # reset work
     profile.work.clear()
     for work in profile_data.work:
         db.add(models.Work(
@@ -128,18 +137,15 @@ def update_profile(profile_id: int, profile_data: schemas.ProfileCreate, db: Ses
     db.refresh(profile)
     return profile
 
-
 # ------------------ DELETE ------------------
 @app.delete("/profiles/{profile_id}")
 def delete_profile(profile_id: int, db: Session = Depends(database.get_db)):
     profile = db.query(models.Profile).filter(models.Profile.id == profile_id).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
-
     db.delete(profile)
     db.commit()
     return {"detail": f"Profile with id {profile_id} has been deleted"}
-
 
 # ------------------ PROJECT QUERY ------------------
 @app.get("/projects", response_model=list[schemas.ProjectResponse])
@@ -148,7 +154,6 @@ def get_projects(skill: str | None = Query(None), db: Session = Depends(database
     if skill:
         query = query.join(models.Profile).join(models.Skill).filter(func.lower(models.Skill.name) == skill.lower())
     return query.all()
-
 
 # ------------------ TOP SKILLS ------------------
 @app.get("/skills/top", response_model=list[schemas.SkillResponse])
@@ -160,9 +165,7 @@ def get_top_skills(limit: int = 10, db: Session = Depends(database.get_db)):
         .limit(limit)
         .all()
     )
-    # Map DB tuples → SkillResponse objects
     return [schemas.SkillResponse(id=i + 1, name=row[0]) for i, row in enumerate(results)]
-
 
 # ------------------ SEARCH ------------------
 @app.get("/search", response_model=list[schemas.ProfileResponse])

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ME-API Playground</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>ME-API Playground</h1>
+
+  <div class="search">
+    <input type="text" id="skillInput" placeholder="Search projects by skill">
+    <button onclick="searchProjects()">Search</button>
+  </div>
+
+  <h2>Projects</h2>
+  <ul id="projectsList"></ul>
+
+  <h2>Profiles</h2>
+  <ul id="profilesList"></ul>
+
+  <script>
+    const backendURL = "https://me-api-playground-rlj9.onrender.com";
+
+    async function fetchProfiles() {
+      const res = await fetch(`${backendURL}/profiles`);
+      const data = await res.json();
+      const list = document.getElementById("profilesList");
+      list.innerHTML = "";
+      data.forEach(profile => {
+        const li = document.createElement("li");
+        li.textContent = `${profile.name} - ${profile.email}`;
+        list.appendChild(li);
+      });
+    }
+
+    async function fetchProjects(skill = "") {
+      const url = skill ? `${backendURL}/projects?skill=${skill}` : `${backendURL}/projects`;
+      const res = await fetch(url);
+      const data = await res.json();
+      const list = document.getElementById("projectsList");
+      list.innerHTML = "";
+      data.forEach(project => {
+        const li = document.createElement("li");
+        li.innerHTML = `<b>${project.title}</b>: ${project.description || ''} (<a href="${project.link}" target="_blank">link</a>)`;
+        list.appendChild(li);
+      });
+    }
+
+    function searchProjects() {
+      const skill = document.getElementById("skillInput").value;
+      fetchProjects(skill);
+    }
+
+    // initial load
+    fetchProfiles();
+    fetchProjects();
+  </script>
+</body>
+</html>
